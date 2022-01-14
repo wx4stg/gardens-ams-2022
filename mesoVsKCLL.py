@@ -56,7 +56,7 @@ if __name__ == "__main__":
             ax.plot(workingKcllData.index, workingKcllData["air_temp_set_1"], "red", label="KCLL")
             ax.scatter(workingKcllData.index, workingKcllData["air_temp_set_1"], s=1, c="red")
             ax.plot(workingGardensData.index, workingGardensData["AvgAT"], "blue", label="Meso2")
-            ax.set_xlabel("Temperature (°F)")
+            ax.set_ylabel("Temperature (°F)")
             ax.scatter(workingGardensData.index, workingGardensData["AvgAT"], s=1, c="blue")
             ax.xaxis.set_major_formatter(mpdates.DateFormatter("%H:%M"))
             ax.set_yticks(range(25, 90, 5))
