@@ -9,12 +9,23 @@ from matplotlib.gridspec import GridSpec
 from matplotlib import image as mpimage
 from matplotlib import dates as mpdates
 from metpy.units import units as mpunits
+from metpy import calc as mpcalc
+import numpy as np
 
 if __name__ == "__main__":
     kcll = pd.read_csv("KCLL.csv", comment="#")[1:]
     kcll["pydatetimes"] = [datetimestring[:-4] for datetimestring in kcll["Date_Time"]]
     kcll["pydatetimes"] = pd.to_datetime(kcll["pydatetimes"], format="%m/%d/%Y %H:%M")
     kcll = kcll.set_index(["pydatetimes"])
+    stringTempList = list()
+    for i in range(len(kcll["air_temp_set_1"])):
+        stringTemp = str(kcll["air_temp_set_1"][i])
+        if len(stringTemp) >= 5:
+            stringTempList.append(float(stringTemp))
+        else:
+            stringTempList.append(np.nan)
+    kcll["air_temp_set_1"] = stringTempList
+    kcll = kcll.dropna(subset=["air_temp_set_1"])
     kcll["air_temp_set_1"] = kcll["air_temp_set_1"].astype(float) * mpunits.degF
     kcll["firstCloudLayer"] = [cloudStr[-1] for cloudStr in kcll["cloud_layer_1_code_set_1"].fillna(1).astype(float).astype(int).astype(str)]
     kcll["firstCloudLayer"] = kcll["firstCloudLayer"].astype(int).replace(0, -.1).replace(1, 0).replace(2, .375).replace(3, .75).replace(4, 1).replace(5, -.1).replace(6, 0).replace(7, .375).replace(8, .75).replace(9, -1)
@@ -23,6 +34,18 @@ if __name__ == "__main__":
     kcll["thirdCloudLayer"] = [cloudStr[-1] for cloudStr in kcll["cloud_layer_3_code_set_1"].fillna(1).astype(float).astype(int).astype(str)]
     kcll["thirdCloudLayer"] = kcll["thirdCloudLayer"].astype(int).replace(0, -.1).replace(1, 0).replace(2, .375).replace(3, .75).replace(4, 1).replace(5, -.1).replace(6, 0).replace(7, .375).replace(8, .75).replace(9, -1)
     kcll["cloud_coverage"] = [max(kcll["firstCloudLayer"].iloc[i], kcll["secondCloudLayer"].iloc[i], kcll["thirdCloudLayer"].iloc[i]) for i in range(0, len(kcll.index))]
+    kcll["wind_speed_set_1"] = kcll["wind_speed_set_1"].astype(float)
+    kcll["wind_direction_set_1"] = kcll["wind_direction_set_1"].astype(float)
+    uwindKcll = list()
+    vwindKcll = list()
+    for i in range(len(kcll["wind_speed_set_1"])):
+        spd = mpunits.Quantity(kcll["wind_speed_set_1"][i], "mph")
+        dir = mpunits.Quantity(kcll["wind_direction_set_1"][i], "degrees")
+        uwind, vwind = mpcalc.wind_components(spd, dir)
+        uwindKcll.append(uwind.to(mpunits("knots")).magnitude)
+        vwindKcll.append(vwind.to(mpunits("knots")).magnitude)
+    kcll["uwind"] = uwindKcll
+    kcll["vwind"] = vwindKcll
     startDate = kcll.index[0]
     startDate = dt(startDate.year, startDate.month, startDate.day, 0, 0, 0)
     endDate = kcll.index[-1]
@@ -33,6 +56,18 @@ if __name__ == "__main__":
     gardens = gardens.set_index(["pydatetimes"])
     gardens["AvgAT"] = gardens["AvgAT"].astype(float)
     gardens["AvgAT"] = gardens["AvgAT"] * 1.8 * mpunits.degF + 32
+    gardens["AWS"] = gardens["AWS"].astype(float)
+    gardens["AWD"] = gardens["AWD"].astype(float)
+    uwindGardens = list()
+    vwindGardens = list()
+    for i in range(len(gardens["AWS"])):
+        spd = mpunits.Quantity(gardens["AWS"][i], "m/s")
+        dir = mpunits.Quantity(gardens["AWD"][i], "degrees")
+        uwind, vwind = mpcalc.wind_components(spd, dir)
+        uwindGardens.append(uwind.to(mpunits("knots")).magnitude)
+        vwindGardens.append(vwind.to(mpunits("knots")).magnitude)
+    gardens["uwind"] = uwindGardens
+    gardens["vwind"] = vwindGardens
 
     while (workingDate + timedelta(hours=14)) < endDate:
         dateStr = workingDate.strftime("%Y-%m-%d")
@@ -42,7 +77,7 @@ if __name__ == "__main__":
             workingGardensData = gardens[gardens.index > workingDate]
             workingGardensData = workingGardensData[workingGardensData.index < workingDate + timedelta(hours=14)]
             fig = plt.figure()
-            gs = GridSpec(2, 1, figure=fig, height_ratios=[1,10])
+            gs = GridSpec(3, 1, figure=fig, height_ratios=[1, 1, 10])
             cloudAx = fig.add_subplot(gs[0,0])
             cloudAx.plot(workingKcllData.index, workingKcllData["cloud_coverage"])
             cloudAx.fill_between(workingKcllData.index, workingKcllData["cloud_coverage"])
@@ -52,7 +87,14 @@ if __name__ == "__main__":
             cloudAx.set_ylim(-0.1, 1.01)
             cloudAx.set_ylabel("Cloud Coverage")
             cloudAx.set_position([cloudAx.get_position().x0, .98-cloudAx.get_position().height, cloudAx.get_position().width, cloudAx.get_position().height])
-            ax = fig.add_subplot(gs[1,0])
+            barbsAx = fig.add_subplot(gs[1,0])
+            barbsAx.barbs(workingKcllData.index, 0, workingKcllData["uwind"], workingKcllData["vwind"], barbcolor="red", flagcolor="red", alpha=0.75, label="KCLL")
+            barbsAx.barbs(workingGardensData.index, 0, workingGardensData["uwind"], workingGardensData["vwind"], barbcolor="blue", flagcolor="blue", alpha=0.75, label="Meso2")
+            barbsAx.legend()
+            barbsAx.set_position([barbsAx.get_position().x0, .8-cloudAx.get_position().height, barbsAx.get_position().width, 2*barbsAx.get_position().height])
+            barbsAx.xaxis.set_major_formatter(mpdates.DateFormatter("%H:%M"))
+            barbsAx.tick_params(left=False, labelleft=False)
+            ax = fig.add_subplot(gs[2,0])
             ax.plot(workingKcllData.index, workingKcllData["air_temp_set_1"], "red", label="KCLL")
             ax.scatter(workingKcllData.index, workingKcllData["air_temp_set_1"], s=1, c="red")
             ax.plot(workingGardensData.index, workingGardensData["AvgAT"], "blue", label="Meso2")
@@ -62,7 +104,7 @@ if __name__ == "__main__":
             ax.set_yticks(range(25, 90, 5))
             ax.set_ylim([25, 90])
             ax.legend()
-            ax.set_position([ax.get_position().x0, .90-(cloudAx.get_position().height+ax.get_position().height), ax.get_position().width, ax.get_position().height])
+            ax.set_position([ax.get_position().x0, .88-(cloudAx.get_position().height+barbsAx.get_position().height+ax.get_position().height), ax.get_position().width, ax.get_position().height])
             tax = fig.add_axes([0,0,(ax.get_position().width/3),.05])
             tax.text(0.5, 0.5, "TAMU Mesonet Gardens and KCLL Temperature and Cloud Cover\nNight of "+dateStr, horizontalalignment="center", verticalalignment="center", fontsize=16)
             tax.axis("off")
@@ -83,4 +125,5 @@ if __name__ == "__main__":
             px = 1/plt.rcParams["figure.dpi"]
             fig.set_size_inches(1920*px, 1080*px)
             fig.savefig("output/"+dateStr.replace("-", "")+".png")
+            exit()
         workingDate = workingDate + timedelta(days=1)
