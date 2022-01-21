@@ -69,6 +69,24 @@ if __name__ == "__main__":
     gardens["uwind"] = uwindGardens
     gardens["vwind"] = vwindGardens
 
+    farm = pd.read_csv("Farm Meso_Table10.dat", skiprows=1).dropna().iloc[1:].reset_index(drop=True)
+    farm["pydatetimes"] = pd.to_datetime(farm["TIMESTAMP"], format="%Y-%m-%d %H:%M:%S", errors="coerce")
+    farm = farm.set_index(["pydatetimes"])
+    farm["AvgAT"] = farm["AvgAT"].astype(float)
+    farm["AvgAT"] = farm["AvgAT"] * 1.8 * mpunits.degF + 32
+    farm["AvgWS"] = farm["AvgWS"].astype(float)
+    farm["AvgWD"] = farm["AvgWD"].astype(float)
+    uwindFarm = list()
+    vwindFarm = list()
+    for i in range(len(farm["AvgWS"])):
+        spd = mpunits.Quantity(farm["AvgWS"][i], "m/s")
+        dir = mpunits.Quantity(farm["AvgWD"][i], "degrees")
+        uwind, vwind = mpcalc.wind_components(spd, dir)
+        uwindFarm.append(uwind.to(mpunits("knots")).magnitude)
+        vwindFarm.append(vwind.to(mpunits("knots")).magnitude)
+    farm["uwind"] = uwindFarm
+    farm["vwind"] = vwindFarm
+
     while (workingDate + timedelta(hours=14)) < endDate:
         dateStr = workingDate.strftime("%Y-%m-%d")
         print(dateStr)
@@ -76,6 +94,8 @@ if __name__ == "__main__":
             workingKcllData = kcll[workingDate:(workingDate + timedelta(hours=14))]
             workingGardensData = gardens[gardens.index > workingDate]
             workingGardensData = workingGardensData[workingGardensData.index < workingDate + timedelta(hours=14)]
+            workingFarmData = farm[farm.index > workingDate]
+            workingFarmData = workingFarmData[workingFarmData.index < workingDate + timedelta(hours=14)]
             fig = plt.figure()
             gs = GridSpec(3, 1, figure=fig, height_ratios=[1, 1, 10])
             cloudAx = fig.add_subplot(gs[0,0])
@@ -89,6 +109,7 @@ if __name__ == "__main__":
             cloudAx.set_position([cloudAx.get_position().x0, .98-cloudAx.get_position().height, cloudAx.get_position().width, cloudAx.get_position().height])
             barbsAx = fig.add_subplot(gs[1,0])
             barbsAx.barbs(workingKcllData.index, 0, workingKcllData["uwind"], workingKcllData["vwind"], barbcolor="red", flagcolor="red", alpha=0.75, label="KCLL")
+            barbsAx.barbs(workingFarmData.index, 0, workingFarmData["uwind"], workingFarmData["vwind"], barbcolor="green", flagcolor="green", alpha=0.75, label="Meso1")
             barbsAx.barbs(workingGardensData.index, 0, workingGardensData["uwind"], workingGardensData["vwind"], barbcolor="blue", flagcolor="blue", alpha=0.75, label="Meso2")
             barbsAx.legend()
             barbsAx.set_position([barbsAx.get_position().x0, .8-cloudAx.get_position().height, barbsAx.get_position().width, 2*barbsAx.get_position().height])
@@ -97,16 +118,18 @@ if __name__ == "__main__":
             ax = fig.add_subplot(gs[2,0])
             ax.plot(workingKcllData.index, workingKcllData["air_temp_set_1"], "red", label="KCLL")
             ax.scatter(workingKcllData.index, workingKcllData["air_temp_set_1"], s=1, c="red")
+            ax.plot(workingFarmData.index, workingFarmData["AvgAT"], "green", label="Meso1")
+            ax.scatter(workingFarmData.index, workingFarmData["AvgAT"], s=1, c="green")
             ax.plot(workingGardensData.index, workingGardensData["AvgAT"], "blue", label="Meso2")
-            ax.set_ylabel("Temperature (°F)")
             ax.scatter(workingGardensData.index, workingGardensData["AvgAT"], s=1, c="blue")
+            ax.set_ylabel("Temperature (°F)")
             ax.xaxis.set_major_formatter(mpdates.DateFormatter("%H:%M"))
             ax.set_yticks(range(25, 90, 5))
             ax.set_ylim([25, 90])
             ax.legend()
             ax.set_position([ax.get_position().x0, .88-(cloudAx.get_position().height+barbsAx.get_position().height+ax.get_position().height), ax.get_position().width, ax.get_position().height])
             tax = fig.add_axes([0,0,(ax.get_position().width/3),.05])
-            tax.text(0.5, 0.5, "TAMU Mesonet Gardens and KCLL Temperature and Cloud Cover\nNight of "+dateStr, horizontalalignment="center", verticalalignment="center", fontsize=16)
+            tax.text(0.5, 0.5, "TAMU Mesonet and KCLL Temperature, Winds and Cloud Cover\nNight of "+dateStr, horizontalalignment="center", verticalalignment="center", fontsize=16)
             tax.axis("off")
             tax.set_position([(ax.get_position().width/2)-(tax.get_position().width/2)+ax.get_position().x0, ax.get_position().y0-.05-tax.get_position().height, tax.get_position().width, tax.get_position().height], which="both")
             lax = fig.add_axes([0,0,(ax.get_position().width/3),1])
@@ -125,5 +148,4 @@ if __name__ == "__main__":
             px = 1/plt.rcParams["figure.dpi"]
             fig.set_size_inches(1920*px, 1080*px)
             fig.savefig("output/"+dateStr.replace("-", "")+".png")
-            exit()
         workingDate = workingDate + timedelta(days=1)
