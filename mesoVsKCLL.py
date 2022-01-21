@@ -105,7 +105,7 @@ if __name__ == "__main__":
             gs = GridSpec(3, 1, figure=fig, height_ratios=[1, 1, 10])
             cloudAx = fig.add_subplot(gs[0,0])
             cloudAx.plot(workingKcllData.index, workingKcllData["cloud_coverage"], "red")
-            cloudAx.fill_between(workingKcllData.index, workingKcllData["cloud_coverage"], "red")
+            cloudAx.fill_between(workingKcllData.index, workingKcllData["cloud_coverage"], color="red")
             cloudAx.xaxis.set_major_formatter(mpdates.DateFormatter("%H:%M"))
             cloudAx.set_yticks([-0.1, 0, .375, .75, 1])
             cloudAx.set_yticklabels(["Missing", "Clear", "Scattered", "Broken", "Overcast"])
