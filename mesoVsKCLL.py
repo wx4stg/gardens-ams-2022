@@ -11,8 +11,13 @@ from matplotlib import dates as mpdates
 from metpy.units import units as mpunits
 from metpy import calc as mpcalc
 import numpy as np
+from os import path
+from pathlib import Path
 
 if __name__ == "__main__":
+    basePath = path.realpath(path.dirname(__file__))
+    outDir = path.join(basePath, "output")
+    Path(outDir).mkdir(parents=True, exist_ok=True)
     kcll = pd.read_csv("KCLL.csv", comment="#")[1:]
     kcll["pydatetimes"] = [datetimestring[:-4] for datetimestring in kcll["Date_Time"]]
     kcll["pydatetimes"] = pd.to_datetime(kcll["pydatetimes"], format="%m/%d/%Y %H:%M")
@@ -147,5 +152,5 @@ if __name__ == "__main__":
             lax.set_position([.95-lax.get_position().width, ax.get_position().y0-.05-lax.get_position().height, lax.get_position().width, lax.get_position().height], which="both")            
             px = 1/plt.rcParams["figure.dpi"]
             fig.set_size_inches(1920*px, 1080*px)
-            fig.savefig("output/"+dateStr.replace("-", "")+".png")
+            fig.savefig(path.join(outDir, dateStr.replace("-", "")+".png"))
         workingDate = workingDate + timedelta(days=1)
